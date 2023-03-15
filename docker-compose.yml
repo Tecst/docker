@@ -1,0 +1,83 @@
+version: "3"
+services:
+  mysql:
+    container_name: mysql
+    image: mysql:latest
+    restart: always
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+
+
+
+  adminer: # db 클라이언트
+    container_name: adminer
+    image: adminer:latest
+    restart: always
+    ports:
+      - "8081:8080"
+
+  redis:
+    container_name: redis
+    image: redis
+    ports:
+      - "6379:6379"
+
+  springboot:
+    container_name: springboot
+    build: .
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      WAIT_HOSTS: mysql:3306
+      SPRING_DATASOURCE_URL: jdbc:mysql://${DB_HOST}:3306/${DB_DATABASE}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${DB_ROOT_PASSWORD}
+    env_file: ./.env
+
+  nginx:
+    container_name: nginx
+    build:
+      dockerfile: dockerfile
+      context: ./nginx
+    ports:
+      - "80:80"
+    restart: always
+    depends_on:
+      - springboot
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    links:
+      - prometheus:prometheus
+    ports:
+      - "3000:3000"
+    user: "1000:1000"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+
+
